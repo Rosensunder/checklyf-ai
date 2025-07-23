@@ -1,86 +1,61 @@
+# File: data/pcos_app.py
+
 import streamlit as st
-import pickle
-import numpy as np
 import pandas as pd
-import plotly.graph_objects as go
-import os
+import pickle
+import matplotlib.pyplot as plt
 
-# Load the model
-with open("pcos_model.pkl", "rb") as f:
-    model = pickle.load(f)
+# Load model
+with open("data/pcos_model.pkl", "rb") as file:
+    model = pickle.load(file)
 
-# Ensure CSV exists
-if not os.path.exists("pcos_results.csv"):
-    df_init = pd.DataFrame(columns=["Age", "BMI", "Hair Growth", "Cycle Length", "Acne", "Weight Gain", "Prediction"])
-    df_init.to_csv("pcos_results.csv", index=False)
+st.set_page_config(page_title="🩺 PCOS Predictor", page_icon="💊", layout="centered")
 
-# Page config
-st.set_page_config(page_title="💊 PCOS Prediction App", layout="centered")
-
-# Title with style
-st.markdown(
-    "<h2 style='text-align: center; color: #6C63FF;'>🌸 PCOS Prediction Tool</h2>",
-    unsafe_allow_html=True
-)
-st.markdown("Welcome! Fill in the health details below to check if you're at risk for PCOS.")
-st.markdown("---")
+st.title("🌸 PCOS Prediction Tool")
+st.markdown("Use this tool to predict if a person may have PCOS based on medical features.")
 
 # Input fields
-col1, col2 = st.columns(2)
+age = st.slider("🎂 Age (years)", 15, 45, 25)
+bmi = st.number_input("⚖️ BMI", min_value=10.0, max_value=50.0, value=22.5)
+weight = st.number_input("🏋️ Weight (kg)", min_value=30.0, max_value=120.0, value=60.0)
+pulse = st.number_input("💓 Pulse rate (bpm)", min_value=50, max_value=150, value=80)
+cycle_length = st.slider("🩸 Cycle Length (days)", 15, 40, 28)
+hair_growth = st.selectbox("🧔 Facial Hair Growth?", ["No", "Yes"])
+skin_darkening = st.selectbox("🌑 Skin Darkening?", ["No", "Yes"])
+acne = st.selectbox("😣 Acne?", ["No", "Yes"])
+fast_food = st.selectbox("🍔 Fast Food Intake?", ["No", "Yes"])
+stress = st.slider("😰 Stress Level (1 to 10)", 1, 10, 5)
 
-with col1:
-    age = st.number_input("🎂 Age (years)", min_value=10, max_value=60, step=1)
-    bmi = st.number_input("⚖️ BMI (Body Mass Index)", min_value=10.0, max_value=50.0, step=0.1)
-    cycle_length = st.number_input("📅 Cycle Length (days)", min_value=15, max_value=45, step=1)
+# Prepare input
+input_data = pd.DataFrame([[
+    age,
+    bmi,
+    weight,
+    pulse,
+    cycle_length,
+    1 if hair_growth == "Yes" else 0,
+    1 if skin_darkening == "Yes" else 0,
+    1 if acne == "Yes" else 0,
+    1 if fast_food == "Yes" else 0,
+    stress
+]], columns=[
+    "Age", "BMI", "Weight", "Pulse Rate", "Cycle Length", 
+    "Facial Hair", "Skin Darkening", "Acne", "Fast Food", "Stress Level"
+])
 
-with col2:
-    hair_growth = st.selectbox("💇 Hair Growth (Unusual facial/body hair?)", ["No", "Yes"])
-    acne = st.selectbox("😣 Acne Present?", ["No", "Yes"])
-    weight_gain = st.selectbox("📈 Sudden Weight Gain?", ["No", "Yes"])
-
-# Convert inputs
-hair_growth_val = 1 if hair_growth == "Yes" else 0
-acne_val = 1 if acne == "Yes" else 0
-weight_gain_val = 1 if weight_gain == "Yes" else 0
-
-# Predict button
+# Predict
 if st.button("🔍 Predict PCOS"):
-    input_data = np.array([[age, bmi, hair_growth_val, cycle_length, acne_val, weight_gain_val]])
     prediction = model.predict(input_data)[0]
-    
-    # Save to CSV
-    new_entry = pd.DataFrame({
-        "Age": [age],
-        "BMI": [bmi],
-        "Hair Growth": [hair_growth_val],
-        "Cycle Length": [cycle_length],
-        "Acne": [acne_val],
-        "Weight Gain": [weight_gain_val],
-        "Prediction": [prediction]
-    })
-    new_entry.to_csv("pcos_results.csv", mode="a", header=False, index=False)
+    probability = model.predict_proba(input_data)[0][1]
 
-    # Show result
-    st.markdown("---")
     if prediction == 1:
-        st.error("🔴 The person is likely to have **PCOS**. Please consult a doctor.")
-        risk_value = 80
+        st.error(f"⚠️ You may be at risk of PCOS. (Confidence: {probability:.2f})")
     else:
-        st.success("🟢 The person is unlikely to have PCOS.")
-        risk_value = 20
+        st.success(f"✅ Low risk of PCOS detected. (Confidence: {1 - probability:.2f})")
 
-    # Plotly gauge chart
-    fig = go.Figure(go.Indicator(
-        mode="gauge+number+delta",
-        value=risk_value,
-        title={'text': "PCOS Risk Score"},
-        gauge={'axis': {'range': [0, 100]},
-               'bar': {'color': "crimson" if prediction == 1 else "green"},
-               'steps': [
-                   {'range': [0, 50], 'color': "lightgreen"},
-                   {'range': [50, 100], 'color': "lightpink"}]}
-    ))
-    st.plotly_chart(fig)
-
-st.markdown("---")
-st.caption("📌 *This prediction is not medical advice. Consult a professional for diagnosis.*")
+    # Visualization
+    st.markdown("### 📊 Your Input Overview:")
+    fig, ax = plt.subplots()
+    input_data.iloc[0].plot(kind='bar', ax=ax, color='skyblue')
+    plt.xticks(rotation=45, ha='right')
+    st.pyplot(fig)
